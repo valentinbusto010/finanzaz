@@ -104,7 +104,7 @@ button.item:hover{background:var(--surface-2)}
 .seg button[aria-pressed="true"].g{color:var(--out)} .seg button[aria-pressed="true"].i{color:var(--in)}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px);padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px))}
 nav.tabs .in{display:flex;width:100%;max-width:560px}
-nav.tabs button{flex:1;border:0;background:none;padding:10px 4px 12px;font-size:.78rem;font-weight:600;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px}
+nav.tabs button{flex:1;border:0;background:none;padding:10px 2px 12px;font-size:.7rem;font-weight:600;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px}
 nav.tabs button svg{width:22px;height:22px}
 nav.tabs button[aria-current="page"]{color:var(--accent)}
 .fabs{position:fixed;z-index:7;right:max(16px,calc(env(safe-area-inset-right,0px) + 16px));bottom:calc(76px + env(safe-area-inset-bottom,0px));display:flex;gap:8px}
@@ -150,6 +150,7 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
   <button data-tab="movimientos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>Movimientos</button>
   <button data-tab="pagos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Pagos</button>
   <button data-tab="inversiones"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>Inversiones</button>
+  <button data-tab="negocio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1.5-5h15L21 9M3 9h18v11H3zM9 20v-6h6v6"/></svg>Negocio</button>
 </div></nav>
 
 <style>
@@ -170,7 +171,7 @@ const SB_URL="https://kuuxcphulirvpfpotjvt.supabase.co";
 const SB_KEY="sb_publishable_HETPWwYqSW7HjI9knP4tiw_nusJYRhb";
 const SB=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 let UID=null;
-const COLS=["movs","pagos","invs","config"];
+const COLS=["movs","pagos","invs","config","neg","productos"];
 const subs=[];
 const err=e=>({code:(e&&e.code==="invalid_argument")?"invalid_argument":"unavailable",message:(e&&e.message)||String(e)});
 async function fetchCol(col){
@@ -229,7 +230,7 @@ const MEDIO_MAP={"Mercado Pago":"mp","Débito":"galicia","Transferencia":"galici
 let db=null;
 let movs=[], pagos=[], invs=[], cfg={usd:1450};
 let tab=(()=>{try{return localStorage.getItem("tab")||"resumen"}catch(e){return "resumen"}})();
-if(["#resumen","#movimientos","#pagos","#inversiones"].includes(location.hash))tab=location.hash.slice(1);
+if(["#resumen","#movimientos","#pagos","#inversiones","#negocio"].includes(location.hash))tab=location.hash.slice(1);
 let month=ym(new Date()), filtro="todos", loaded={m:false,p:false,i:false}, offline=false;
 
 function pad(n){return String(n).padStart(2,"0")}
@@ -279,6 +280,8 @@ async function boot(){
   db.collection("pagos").onSnapshot(s=>{pagos=s.docs.map(d=>({id:d.id,...d.data()}));if(!s.metadata.fromCache)loaded.p=true;settle();render()},e=>note("Error leyendo pagos ("+e.code+")."));
   db.collection("invs").onSnapshot(s=>{invs=s.docs.map(d=>({id:d.id,...d.data()}));if(!s.metadata.fromCache)loaded.i=true;settle();render()},e=>note("Error leyendo inversiones ("+e.code+")."));
   db.doc("config/main").onSnapshot(s=>{if(s.exists)cfg={...cfg,...s.data()};render()},()=>{});
+  db.collection("neg").onSnapshot(s=>{neg=s.docs.map(d=>({id:d.id,...d.data()}));render()},e=>note("Error leyendo el negocio ("+e.code+")."));
+  db.collection("productos").onSnapshot(s=>{prods=s.docs.map(d=>({id:d.id,...d.data()}));render()},e=>note("Error leyendo productos ("+e.code+")."));
 }
 async function save(col,id,data){
   if(!db){toast("Sin conexión a tus datos");return false}
@@ -456,7 +459,10 @@ function vInvs(){
 function render(){
   document.getElementById("mLabel").textContent=monthName(month);
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===tab?"page":"false"));
-  const v={resumen:vResumen,movimientos:vMovs,pagos:vPagos,inversiones:vInvs}[tab]||vResumen;
+  const v={resumen:vResumen,movimientos:vMovs,pagos:vPagos,inversiones:vInvs,negocio:vNegocio}[tab]||vResumen;
+  const nb=tab==="negocio",f1=document.getElementById("fab"),f2=document.getElementById("fab2");
+  f1.lastChild.textContent=nb?" Venta":" Gasto";f1.setAttribute("aria-label",nb?"Cargar venta":"Cargar gasto");
+  f2.lastChild.textContent=nb?" Compra":" Reparto";f2.setAttribute("aria-label",nb?"Cargar compra de stock":"Cargar reparto");
   document.getElementById("main").innerHTML=v();
 }
 
@@ -619,6 +625,248 @@ async function pagar(id){
     toast(`${cNombre(desde)} no tenía saldo: registrá de dónde pasaste la plata`)}
 }
 
+/* ---------- Tecno Riv (negocio) ---------- */
+const CAT_PROD=["Smartwatches","Auriculares","AirPods","Cargadores Android","Cargadores Apple","Accesorios","Otros"];
+const CANALES=["WhatsApp","Web","Instagram","Mercado Libre","En persona","Otro"];
+const COBROS=["Mercado Pago","Transferencia","Efectivo","Tarjeta"];
+const CAT_GN=["Publicidad","Envíos","Packaging","Comisiones","Web y apps","Otros"];
+let neg=[], prods=[];
+let nview=(()=>{try{return localStorage.getItem("nview")||"resumen"}catch(e){return"resumen"}})();
+function negMes(){return neg.filter(n=>(n.fecha||"").startsWith(month))}
+function prodById(id){return prods.find(p=>p.id===id)}
+function vTot(v){return(+v.cantidad||0)*(+v.precio||0)}
+function vCos(v){return(+v.cantidad||0)*(+v.costo||0)}
+function cTot(c){return(+c.cantidad||0)*(+c.costo||0)}
+function cajaNeg(){let s=0;for(const n of neg){
+  if(n.tipo==="venta")s+=vTot(n);else if(n.tipo==="compra")s-=cTot(n);
+  else if(n.tipo==="gasto"||n.tipo==="retiro")s-=(+n.monto||0);else if(n.tipo==="aporte")s+=(+n.monto||0);
+  else if(n.tipo==="ajuste")s+=(+n.delta||0)}return s}
+function negStats(arr){
+  const v=arr.filter(n=>n.tipo==="venta"),sum=(a,f)=>a.reduce((x,y)=>x+f(y),0);
+  const ventas=sum(v,vTot),cmv=sum(v,vCos),uds=sum(v,x=>+x.cantidad||0);
+  const gastos=sum(arr.filter(n=>n.tipo==="gasto"),x=>+x.monto||0),retiros=sum(arr.filter(n=>n.tipo==="retiro"),x=>+x.monto||0);
+  const compras=sum(arr.filter(n=>n.tipo==="compra"),cTot),bruto=ventas-cmv;
+  return{v,ventas,cmv,uds,bruto,mb:ventas?bruto/ventas*100:0,gastos,neto:bruto-gastos,retiros,compras,ticket:v.length?ventas/v.length:0};
+}
+function barsList(rows,fmt){const mx=Math.max(...rows.map(r=>Math.abs(r[1])),1);
+  return`<div class="bars">${rows.map(([k,v,extra])=>`<div class="bar"><div class="row"><b>${esc(k)}</b><span>${fmt(v,extra)}</span></div><div class="track"><div class="fill" style="width:${(Math.max(0,v)/mx*100).toFixed(1)}%"></div></div></div>`).join("")}</div>`}
+
+function negItem(n){
+  const d=shortDate(n.fecha||today());
+  if(n.tipo==="venta"){const m=vTot(n)-vCos(n);return`<button class="item" data-nedit="${n.id}"><span class="ico in">${initials(n.nombre)}</span><span class="mid"><span class="t">${+n.cantidad>1?n.cantidad+"× ":""}${esc(n.nombre)}</span><span class="s">${esc(n.canal||"")} · ${esc(n.cobro||"")} · ${d}</span></span><span class="amt pos">${money(vTot(n))}<small>margen ${money(m)}</small></span></button>`}
+  if(n.tipo==="compra")return`<button class="item" data-nedit="${n.id}"><span class="ico inv">${initials(n.nombre)}</span><span class="mid"><span class="t">Compra · ${n.cantidad}× ${esc(n.nombre)}</span><span class="s">${esc(n.proveedor||"Proveedor")} · ${d}</span></span><span class="amt neg">−${money(cTot(n))}<small>${money(+n.costo)} c/u</small></span></button>`;
+  const lbl={gasto:n.categoria||"Gasto",retiro:"Retiro (sueldo tuyo)",aporte:"Plata que pusiste",ajuste:"Ajuste de caja"}[n.tipo];
+  const sign=n.tipo==="aporte"?1:n.tipo==="ajuste"?Math.sign(+n.delta||0):-1,val=n.tipo==="ajuste"?Math.abs(+n.delta||0):+n.monto||0;
+  return`<button class="item" data-nedit="${n.id}"><span class="ico ${sign<0?"out":"tr"}">${n.tipo==="gasto"?initials(n.categoria):n.tipo==="retiro"?"→":n.tipo==="aporte"?"←":"±"}</span><span class="mid"><span class="t">${esc(lbl)}</span><span class="s">${esc(n.nota||"")}${n.nota?" · ":""}${d}</span></span><span class="amt ${sign<0?"neg":""}">${sign<0?"−":"+"}${money(val)}</span></button>`;
+}
+function byF(a,b){return(b.fecha||"").localeCompare(a.fecha||"")||(b.creado||0)-(a.creado||0)}
+
+function vNegocio(){
+  const seg=`<div class="seg" role="group" aria-label="Sección del negocio">${[["resumen","Resumen"],["ventas","Ventas"],["stock","Stock"],["gastos","Gastos"]].map(([k,l])=>`<button data-nview="${k}" aria-pressed="${nview===k}">${l}</button>`).join("")}</div>`;
+  const body={resumen:vNegResumen,ventas:vNegVentas,stock:vNegStock,gastos:vNegGastos}[nview]||vNegResumen;
+  return`<div class="view">${seg}<div class="view two">${body()}</div></div>`;
+}
+function vNegResumen(){
+  const s=negStats(negMes()),caja=cajaNeg();
+  const stockVal=prods.reduce((a,p)=>a+(+p.stock||0)*(+p.costo||0),0),stockPot=prods.reduce((a,p)=>a+(+p.stock||0)*(+p.precio||0),0);
+  const bajos=prods.filter(p=>(+p.stock||0)<=(+p.minimo||0)).sort((a,b)=>(+a.stock||0)-(+b.stock||0));
+  const pp={};for(const v of s.v){const k=v.productoId||v.nombre,o=pp[k]||(pp[k]={n:v.nombre,uds:0,m:0});o.uds+=+v.cantidad||0;o.m+=vTot(v)-vCos(v)}
+  const top=Object.values(pp).sort((a,b)=>b.m-a.m).slice(0,5);
+  const pc={};for(const v of s.v)pc[v.canal||"Otro"]=(pc[v.canal||"Otro"]||0)+vTot(v);
+  const can=Object.entries(pc).sort((a,b)=>b[1]-a[1]);
+  const vacio=!neg.length&&!prods.length;
+  return`${vacio?`<section class="card full"><h2>Para arrancar</h2><div class="hint"><b>1.</b> En <b>Stock</b>, cargá tus productos con costo, precio y cantidad.<br><b>2.</b> Tocá <b>Ajustar caja</b> y poné cuánta plata tiene hoy el negocio.<br><b>3.</b> Cada vez que vendas, tocá <b>+ Venta</b>. Cada vez que repongas, <b>+ Compra</b>.</div></section>`:""}
+  <section class="card hero"><h2>Ganancia de ${monthName(month).split(" ")[0]}</h2>
+    <div class="big ${s.neto<0?"neg":""}">${money(s.neto)}</div>
+    <div class="sub">Ventas ${money(s.ventas)} − costo ${money(s.cmv)} − gastos ${money(s.gastos)}</div>
+    <div class="split">
+      <div class="stat"><div class="k">Ventas</div><div class="v">${money(s.ventas)}</div></div>
+      <div class="stat"><div class="k">Margen</div><div class="v ${s.ventas&&s.mb<25?"neg":"pos"}">${s.ventas?s.mb.toFixed(0)+"%":"—"}</div></div>
+      <div class="stat"><div class="k">Unidades</div><div class="v">${s.uds}</div></div>
+      <div class="stat"><div class="k">Ticket promedio</div><div class="v">${money(s.ticket)}</div></div>
+    </div>
+    ${s.ventas&&s.mb<25?`<div class="note" style="margin:12px 0 0">Margen bajo: con menos de 25% cuesta cubrir publicidad, envíos y el día de mañana un alquiler. Revisá precios en Stock.</div>`:""}
+  </section>
+  <section class="card"><h2>Caja del negocio<button class="btn sm" data-nact="caja">Ajustar caja</button></h2>
+    <div class="kv"><span>Plata del negocio hoy</span><b class="${caja<0?"neg":""}">${money(caja)}</b></div>
+    <div class="kv"><span>Stock al costo</span><b>${money(stockVal)}</b></div>
+    <div class="kv"><span>Stock a precio de venta</span><b>${money(stockPot)}</b></div>
+    <div class="kv"><span>Compraste este mes</span><b>${money(s.compras)}</b></div>
+    <div class="kv"><span>Te retiraste este mes</span><b>${money(s.retiros)}</b></div>
+    ${s.retiros>0&&s.retiros>s.neto?`<div class="note" style="margin:8px 0 0">Te retiraste más de lo que ganó el negocio este mes: eso sale de la plata para reponer stock.</div>`:""}
+    ${caja<-0.5?`<div class="note" style="margin:8px 0 0">La caja dio negativa. Tocá Ajustar caja y poné la plata real del negocio.</div>`:""}
+    <div class="hbtns" style="margin-top:12px"><button class="btn sm primary" data-nact="retiro">Retirar sueldo</button><button class="btn sm" data-nact="aporte">Poner plata</button></div>
+  </section>
+  <section class="card"><h2>Stock bajo<button class="btn sm" data-nview="stock">Ver stock</button></h2>
+    ${bajos.length?`<div class="list">${bajos.slice(0,6).map(p=>`<button class="item" data-nprod="${p.id}"><span class="ico out">${initials(p.nombre)}</span><span class="mid"><span class="t">${esc(p.nombre)}</span><span class="s">mínimo ${+p.minimo||0}</span></span><span class="amt ${(+p.stock||0)<=0?"neg":""}">${+p.stock||0} u</span></button>`).join("")}</div>`:`<div class="empty">${prods.length?"Todo con stock suficiente.":"Cargá tus productos en Stock para ver alertas."}</div>`}
+  </section>
+  <section class="card"><h2>Lo que más deja</h2>
+    ${top.length?barsList(top.map(t=>[t.n,t.m,t.uds]),(v,u)=>`${money(v)} · ${u} u`):`<div class="empty">Cuando cargues ventas vas a ver qué productos te dejan más plata.</div>`}
+  </section>
+  <section class="card"><h2>Ventas por canal</h2>
+    ${can.length?barsList(can,v=>`${money(v)} · ${Math.round(v/s.ventas*100)}%`):`<div class="empty">Sin ventas en ${monthName(month)}.</div>`}
+  </section>`;
+}
+function vNegVentas(){
+  const arr=negMes().filter(n=>n.tipo==="venta").sort(byF),s=negStats(negMes());
+  return`<section class="card full"><h2>Ventas de ${monthName(month).split(" ")[0]}<button class="btn sm primary" data-nact="venta">+ Venta</button></h2>
+    <div class="kv"><span>${arr.length} venta${arr.length===1?"":"s"} · ${s.uds} u</span><b class="pos">${money(s.ventas)}</b></div>
+    ${arr.length?`<div class="list">${arr.map(negItem).join("")}</div>`:`<div class="empty">Sin ventas cargadas este mes. Tocá <b>+ Venta</b> cada vez que vendas.</div>`}
+  </section>`;
+}
+function vNegStock(){
+  const arr=[...prods].sort((a,b)=>(a.categoria||"").localeCompare(b.categoria||"")||(a.nombre||"").localeCompare(b.nombre||""));
+  const comp=negMes().filter(n=>n.tipo==="compra").sort(byF);
+  return`<section class="card"><h2>Productos<button class="btn sm primary" data-nact="producto">+ Producto</button></h2>
+    ${arr.length?`<div class="list">${arr.map(p=>{const mg=+p.precio?((+p.precio-(+p.costo||0))/+p.precio*100):0,bajo=(+p.stock||0)<=(+p.minimo||0);
+      return`<button class="item" data-nprod="${p.id}"><span class="ico inv">${initials(p.nombre)}</span><span class="mid"><span class="t">${esc(p.nombre)}</span><span class="s">${esc(p.categoria||"")} · costo ${money(+p.costo||0)} · precio ${money(+p.precio||0)} · <span class="${mg<25?"neg":"pos"}">${mg.toFixed(0)}%</span></span></span><span class="amt ${bajo?"neg":""}">${+p.stock||0} u${bajo?`<small><span class="chip late">Reponer</span></small>`:""}</span></button>`}).join("")}</div>`
+      :`<div class="empty">Cargá cada producto con lo que te cuesta, a cuánto lo vendés y cuántos tenés. El margen y las alertas de stock salen de acá.</div>`}
+  </section>
+  <section class="card"><h2>Compras de ${monthName(month).split(" ")[0]}<button class="btn sm" data-nact="compra">+ Compra</button></h2>
+    ${comp.length?`<div class="list">${comp.map(negItem).join("")}</div>`:`<div class="empty">Cuando repongas stock, cargalo con <b>+ Compra</b>: suma unidades y actualiza el costo.</div>`}
+  </section>`;
+}
+function vNegGastos(){
+  const arr=negMes().filter(n=>["gasto","retiro","aporte","ajuste"].includes(n.tipo)).sort(byF),s=negStats(negMes());
+  return`<section class="card full"><h2>Gastos y retiros<button class="btn sm primary" data-nact="gasto">+ Gasto</button></h2>
+    <div class="kv"><span>Gastos del negocio</span><b class="neg">${money(s.gastos)}</b></div>
+    <div class="kv"><span>Retiros para vos</span><b>${money(s.retiros)}</b></div>
+    ${arr.length?`<div class="list">${arr.map(negItem).join("")}</div>`:`<div class="empty">Cargá publicidad, envíos, packaging y comisiones. Sin esto, la ganancia se ve más alta de lo que es.</div>`}
+  </section>`;
+}
+
+/* formularios del negocio */
+async function ajStock(pid,delta,costoNuevo,cant){
+  const p=prodById(pid);if(!p||!db)return;const st=+p.stock||0,upd={stock:st+delta};
+  if(costoNuevo!=null)upd.costo=st>0?Math.round((st*(+p.costo||0)+cant*costoNuevo)/(st+cant)*100)/100:costoNuevo;
+  try{await db.collection("productos").doc(pid).update(upd)}catch(e){toast("No se actualizó el stock")}
+}
+function productoForm(p){
+  const init=p?{...p,monedaCosto:"ARS"}:{nombre:"",categoria:CAT_PROD[0],costo:"",monedaCosto:"ARS",precio:"",stock:"",minimo:2};
+  openSheet(p?"Editar producto":"Nuevo producto",()=>[
+    {type:"text",k:"nombre",label:"Producto",ph:"Ej: AirPods Pro 2 réplica, cargador 20W"},
+    {type:"select",k:"categoria",label:"Categoría",opts:CAT_PROD},
+    {type:"pair",items:[{type:"number",k:"costo",label:"Costo por unidad",ph:"0"},{type:"select",k:"monedaCosto",label:"Moneda",opts:["ARS","USD"]}]},
+    {type:"number",k:"precio",label:"Precio de venta ($)",cls:"amount",ph:"0"},
+    {type:"pair",items:[{type:"number",k:"stock",label:"Unidades en stock",ph:"0"},{type:"number",k:"minimo",label:"Avisar con",ph:"2"}]},
+    {type:"info",html:`Si el costo es en dólares, se pasa a pesos con tu dólar de referencia (${money(+cfg.usd)}).`}
+  ],init,st=>{
+    if(!st.nombre.trim())return"Poné el nombre del producto.";if(!(+st.precio>0))return"Poné el precio de venta.";
+    const costo=toARS(+st.costo||0,st.monedaCosto);
+    const data={nombre:st.nombre.trim(),categoria:st.categoria,costo:Math.round(costo*100)/100,precio:+st.precio,stock:+st.stock||0,minimo:+st.minimo||0,creado:p?.creado||Date.now()};
+    return save("productos",p?.id,data).then(ok=>{ok&&toast(p?"Producto actualizado":"Producto agregado");return ok});
+  },p?()=>remove("productos",p.id).then(ok=>{ok&&toast("Producto borrado");return ok}):null);
+}
+function ventaForm(v){
+  if(!v&&!prods.length){toast("Primero cargá tus productos en Stock");nview="stock";render();productoForm();return}
+  const opts=[...prods].sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"")).map(p=>[p.id,`${p.nombre} (${+p.stock||0} u)`]).concat([["_otro","Otro producto (sin stock)"]]);
+  const first=prods[0];
+  const init=v?{...v,productoId:v.productoId||"_otro"}:{productoId:first.id,_last:first.id,cantidad:1,precio:+first.precio||"",costo:+first.costo||"",nombre:"",canal:"WhatsApp",cobro:"Mercado Pago",fecha:today(),nota:""};
+  if(v)init._last=init.productoId;
+  openSheet(v?"Editar venta":"Nueva venta",st=>{
+    if(st.productoId!==st._last){const p=prodById(st.productoId);if(p){st.precio=+p.precio||"";st.costo=+p.costo||""}st._last=st.productoId}
+    const otro=st.productoId==="_otro";
+    return[{type:"select",k:"productoId",label:"Producto",opts,redraw:true},
+      ...(otro?[{type:"pair",items:[{type:"text",k:"nombre",label:"Qué vendiste",ph:"Ej: funda"},{type:"number",k:"costo",label:"Te costó (c/u)",ph:"0"}]}]:[]),
+      {type:"pair",items:[{type:"number",k:"cantidad",label:"Cantidad",ph:"1"},{type:"number",k:"precio",label:"Precio c/u",cls:"amount",ph:"0"}]},
+      {type:"pair",items:[{type:"select",k:"canal",label:"Canal",opts:CANALES},{type:"select",k:"cobro",label:"Cobro",opts:COBROS}]},
+      {type:"date",k:"fecha",label:"Fecha"},{type:"text",k:"nota",label:"Cliente o detalle (opcional)",ph:"Ej: Juan, envío a Río Cuarto"}];
+  },init,st=>{
+    const cant=Math.round(+st.cantidad||0),otro=st.productoId==="_otro",p=otro?null:prodById(st.productoId);
+    if(!(cant>0))return"Poné la cantidad.";if(!(+st.precio>0))return"Poné el precio.";if(otro&&!st.nombre.trim())return"Escribí qué vendiste.";
+    const data={tipo:"venta",productoId:otro?null:st.productoId,nombre:otro?st.nombre.trim():(p?.nombre||v?.nombre||"Producto"),cantidad:cant,precio:+st.precio,
+      costo:otro?(+st.costo||0):(v&&v.productoId===st.productoId?+v.costo:+(p?.costo||0)),canal:st.canal,cobro:st.cobro,fecha:st.fecha||today(),nota:(st.nota||"").trim(),creado:v?.creado||Date.now()};
+    return save("neg",v?.id,data).then(async ok=>{if(!ok)return false;
+      if(v&&v.productoId&&v.productoId!==data.productoId)await ajStock(v.productoId,+v.cantidad);
+      if(data.productoId){const prev=v&&v.productoId===data.productoId?+v.cantidad:0;await ajStock(data.productoId,prev-cant);
+        const q=prodById(data.productoId);if(q&&(+q.stock||0)+prev-cant<0)toast("Ojo: el stock quedó negativo. Revisalo en Stock.");else toast(v?"Venta actualizada":`Venta cargada · margen ${money(vTot(data)-vCos(data))}`)}
+      else toast(v?"Venta actualizada":"Venta cargada");return true});
+  },v?()=>removeNeg(v):null);
+}
+function compraForm(c){
+  const opts=[...prods].sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"")).map(p=>[p.id,p.nombre]).concat([["_nuevo","Producto nuevo"]]);
+  const init=c?{...c,moneda:c.moneda||"ARS",costoU:c.costoOrig??c.costo}:{productoId:prods[0]?.id||"_nuevo",cantidad:"",costoU:"",moneda:"ARS",proveedor:"",fecha:today(),nombre:"",categoria:CAT_PROD[0],precio:""};
+  openSheet(c?"Editar compra":"Compra de stock",st=>{
+    const nuevo=st.productoId==="_nuevo"&&!c;
+    return[{type:"select",k:"productoId",label:"Producto",opts:c?opts.filter(o=>o[0]===c.productoId):opts,redraw:true},
+      ...(nuevo?[{type:"text",k:"nombre",label:"Nombre del producto",ph:"Ej: Smartwatch T900"},{type:"pair",items:[{type:"select",k:"categoria",label:"Categoría",opts:CAT_PROD},{type:"number",k:"precio",label:"Precio de venta",ph:"0"}]}]:[]),
+      {type:"pair",items:[{type:"number",k:"cantidad",label:"Unidades",ph:"0"},{type:"number",k:"costoU",label:"Costo c/u",cls:"amount",ph:"0"}]},
+      {type:"pair",items:[{type:"select",k:"moneda",label:"Moneda",opts:["ARS","USD"]},{type:"date",k:"fecha",label:"Fecha"}]},
+      {type:"text",k:"proveedor",label:"Proveedor (opcional)",ph:"Ej: mayorista Once"},
+      {type:"info",html:"Suma las unidades al stock y promedia el costo con lo que ya tenías. Sale de la caja del negocio."}];
+  },init,st=>{
+    const cant=Math.round(+st.cantidad||0),nuevo=st.productoId==="_nuevo"&&!c;
+    if(!(cant>0))return"Poné cuántas unidades compraste.";if(!(+st.costoU>0))return"Poné el costo por unidad.";if(nuevo&&!st.nombre.trim())return"Poné el nombre del producto.";if(nuevo&&!(+st.precio>0))return"Poné el precio de venta.";
+    const costo=Math.round(toARS(+st.costoU,st.moneda)*100)/100;
+    return(async()=>{
+      let pid=st.productoId,nombre=prodById(pid)?.nombre||c?.nombre;
+      if(nuevo){const ref=db.collection("productos").doc();nombre=st.nombre.trim();
+        try{await ref.set({nombre,categoria:st.categoria,costo,precio:+st.precio,stock:cant,minimo:2,creado:Date.now()})}catch(e){toast("No se guardó el producto");return false}pid=ref.id}
+      const data={tipo:"compra",productoId:pid,nombre,cantidad:cant,costo,costoOrig:+st.costoU,moneda:st.moneda,proveedor:(st.proveedor||"").trim(),fecha:st.fecha||today(),creado:c?.creado||Date.now()};
+      const ok=await save("neg",c?.id,data);if(!ok)return false;
+      if(!nuevo){if(c)await ajStock(pid,cant-(+c.cantidad||0));else await ajStock(pid,cant,costo,cant)}
+      toast(c?"Compra actualizada":`Stock de ${nombre}: +${cant} u`);return true})();
+  },c?()=>removeNeg(c):null);
+}
+function gastoNegForm(g){
+  const init=g?{...g}:{categoria:CAT_GN[0],monto:"",fecha:today(),nota:""};
+  openSheet(g?"Editar gasto del negocio":"Gasto del negocio",()=>[
+    {type:"number",k:"monto",label:"Monto",cls:"amount",ph:"0"},
+    {type:"pair",items:[{type:"select",k:"categoria",label:"Tipo",opts:CAT_GN},{type:"date",k:"fecha",label:"Fecha"}]},
+    {type:"text",k:"nota",label:"Detalle (opcional)",ph:"Ej: campaña Instagram, envío Andreani"}
+  ],init,st=>{
+    if(!(+st.monto>0))return"Poné el monto.";
+    return save("neg",g?.id,{tipo:"gasto",categoria:st.categoria,monto:+st.monto,fecha:st.fecha||today(),nota:(st.nota||"").trim(),creado:g?.creado||Date.now()}).then(ok=>{ok&&toast("Gasto del negocio cargado");return ok});
+  },g?()=>removeNeg(g):null);
+}
+function retiroForm(r,tipo){
+  tipo=r?.tipo||tipo||"retiro";const ret=tipo==="retiro";
+  const init=r?{...r}:{monto:"",cuenta:"mp",fecha:today(),nota:""};
+  const tieneDeuda=cuentas().some(c=>c.id==="tecnoriv");
+  openSheet(r?(ret?"Editar retiro":"Editar aporte"):(ret?"Retirar sueldo del negocio":"Poner plata en el negocio"),()=>[
+    {type:"number",k:"monto",label:"Monto",cls:"amount",ph:"0"},
+    {type:"pair",items:[{type:"select",k:"cuenta",label:ret?"Lo pasás a":"Sale de",opts:cuentaOpts(c=>c.tipo!=="credito")},{type:"date",k:"fecha",label:"Fecha"}]},
+    {type:"text",k:"nota",label:"Detalle (opcional)",ph:ret?"Ej: sueldo de noviembre":"Ej: devuelvo lo que usé"},
+    {type:"info",html:ret?"Se descuenta de la caja del negocio y entra a tu cuenta personal como ingreso <b>Retiro Tecno Riv</b>.":`Entra a la caja del negocio y sale de tu cuenta personal${tieneDeuda?" (baja tu <b>Deuda con Tecno Riv</b>)":""}.`}
+  ],init,st=>{
+    if(!(+st.monto>0))return"Poné el monto.";
+    return(async()=>{
+      const ref=r?db.collection("neg").doc(r.id):db.collection("neg").doc(),monto=+st.monto,fecha=st.fecha||today(),nota=(st.nota||"").trim();
+      const ok=await save("neg",ref.id,{tipo,monto,cuenta:st.cuenta,fecha,nota,creado:r?.creado||Date.now()});if(!ok)return false;
+      const mov=ret?{tipo:"ingreso",categoria:"Retiro Tecno Riv",cuenta:st.cuenta,monto,moneda:"ARS",fecha,nota:nota||"Retiro de Tecno Riv",negId:ref.id,creado:Date.now()}
+        :(tieneDeuda?{tipo:"transferencia",cuenta:st.cuenta,destino:"tecnoriv",monto,moneda:"ARS",fecha,nota:nota||"Plata para Tecno Riv",negId:ref.id,creado:Date.now()}
+        :{tipo:"gasto",categoria:"Tecno Riv",cuenta:st.cuenta,monto,moneda:"ARS",fecha,nota:nota||"Plata para Tecno Riv",negId:ref.id,creado:Date.now()});
+      await save("movs","neg-"+ref.id,mov);toast(ret?"Retiro cargado en el negocio y en tu cuenta":"Aporte cargado");return true})();
+  },r?()=>removeNeg(r):null);
+}
+function cajaForm(){
+  openSheet("Ajustar caja del negocio",()=>[
+    {type:"number",k:"real",label:"Plata del negocio hoy (lo que tiene en su cuenta y en mano)",cls:"amount",ph:"0"},
+    {type:"info",html:`Según lo cargado: <b>${money(cajaNeg())}</b>. Contá solo la plata del negocio, no la tuya.`}
+  ],{real:""},st=>{
+    if(st.real===""||isNaN(+st.real))return"Poné el monto.";const delta=Math.round((+st.real-cajaNeg())*100)/100;
+    if(Math.abs(delta)<0.5){toast("La caja ya coincide");return Promise.resolve(true)}
+    return save("neg",null,{tipo:"ajuste",delta,fecha:today(),nota:"Caja real "+money(+st.real),creado:Date.now()}).then(ok=>{ok&&toast("Caja del negocio actualizada");return ok});
+  });
+}
+async function removeNeg(n){
+  const ok=await remove("neg",n.id);if(!ok)return false;
+  if(n.tipo==="venta"&&n.productoId)await ajStock(n.productoId,+n.cantidad||0);
+  if(n.tipo==="compra"&&n.productoId)await ajStock(n.productoId,-(+n.cantidad||0));
+  if(n.tipo==="retiro"||n.tipo==="aporte")await remove("movs","neg-"+n.id);
+  toast("Borrado");return true;
+}
+function negEdit(id){const n=neg.find(x=>x.id===id);if(!n)return;
+  ({venta:ventaForm,compra:compraForm,gasto:gastoNegForm,retiro:retiroForm,aporte:retiroForm}[n.tipo]||((x)=>openSheet("Ajuste de caja",()=>[{type:"info",html:`${esc(x.nota||"")} (${(+x.delta>=0?"+":"")+money(+x.delta)}). Si lo borrás, la caja vuelve al valor calculado.`}],{},null,()=>removeNeg(x))))(n)}
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button");if(!t||t.closest(".sheet-bg"))return;
+  if(t.dataset.nview){nview=t.dataset.nview;try{localStorage.setItem("nview",nview)}catch(_){}if(tab!=="negocio")tab="negocio";render();return}
+  if(t.dataset.nedit)return negEdit(t.dataset.nedit);
+  if(t.dataset.nprod){const p=prodById(t.dataset.nprod);p&&productoForm(p);return}
+  const a=t.dataset.nact;if(!a)return;
+  ({venta:()=>ventaForm(),compra:()=>compraForm(),producto:()=>productoForm(),gasto:()=>gastoNegForm(),retiro:()=>retiroForm(null,"retiro"),aporte:()=>retiroForm(null,"aporte"),caja:cajaForm}[a]||(()=>{}))();
+});
+
 /* ---------- eventos ---------- */
 document.addEventListener("click",e=>{
   const t=e.target.closest("button");if(!t||t.closest(".sheet-bg"))return;
@@ -641,11 +889,11 @@ document.addEventListener("click",e=>{
   if(t.dataset.new==="transferencia")return movForm("transferencia");
   if(t.id==="editUsd")return usdForm();
 });
-document.getElementById("fab").onclick=()=>movForm("gasto");
-document.getElementById("fab2").onclick=()=>{const j=juevesRep();repartoForm(j.pendiente?j.last:null)};
+document.getElementById("fab").onclick=()=>tab==="negocio"?ventaForm():movForm("gasto");
+document.getElementById("fab2").onclick=()=>{if(tab==="negocio")return compraForm();const j=juevesRep();repartoForm(j.pendiente?j.last:null)};
 document.getElementById("mPrev").onclick=()=>{month=shiftMonth(month,-1);render()};
 document.getElementById("mNext").onclick=()=>{month=shiftMonth(month,1);render()};
-window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(["resumen","movimientos","pagos","inversiones"].includes(h)){tab=h;render()}});
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(["resumen","movimientos","pagos","inversiones","negocio"].includes(h)){tab=h;render()}});
 </script>
 <style>
 .gate{position:fixed;inset:0;z-index:50;background:var(--bg);display:grid;place-items:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px));overflow:auto}
