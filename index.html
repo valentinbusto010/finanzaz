@@ -330,7 +330,7 @@ function vCuentas(){
       if(c.tipo==="credito")return`<button class="acc" data-ajuste="${c.id}"><span class="n">${esc(c.nombre)}</span><span class="v ${v<0?"neg":""}">${v<0?money(-v):"Sin deuda"}</span><span class="h">${v<0?"a pagar":"tocá para cargar la deuda"}</span></button>`;
       return`<button class="acc" data-ajuste="${c.id}"><span class="n">${esc(c.nombre)}</span><span class="v ${v<0?"neg":""}">${money(v)}</span><span class="h">${v<0?"revisá: quedó negativo":"tocá para ajustar"}</span></button>`}).join("")}</div>
     <div class="kv" style="margin-top:10px"><span>Disponible en cuentas</span><b>${money(disp)}</b></div>
-    ${deuda?`<div class="kv"><span>Menos deuda de tarjeta</span><b>${money(disp-deuda)}</b></div>`:""}
+    ${deuda?`<div class="kv"><span>Menos deudas (tarjeta y otras)</span><b>${money(disp-deuda)}</b></div>`:""}
   </section>`
 }
 
