@@ -608,11 +608,15 @@ function usdForm(){
 async function pagar(id){
   const p=pagos.find(x=>x.id===id);if(!p||!db)return;
   const desde=p.cuenta||"mp",cred=credito(),esTarjeta=p.categoria==="Tarjeta"&&cred;
+  const antes=saldos()[desde]||0,falta=Math.round((toARS(+p.monto,p.moneda)-antes)*100)/100;
   const base={monto:+p.monto,moneda:p.moneda,cuenta:desde,fecha:today(),nota:p.concepto,creado:Date.now(),pagoId:p.id};
   const ok=await save("movs",null,esTarjeta?{...base,tipo:"transferencia",destino:cred.id}:{...base,tipo:"gasto",categoria:p.categoria||"Servicios"});
   if(!ok){render();return}
   const upd=p.recurrente==="mensual"?{vence:addMonth(p.vence)}:{pagado:true,pagadoEl:today()};
   try{await db.collection("pagos").doc(id).update(upd);toast(p.recurrente==="mensual"?`Pagado desde ${cNombre(desde)}. Próximo: ${shortDate(upd.vence)}`:`Pagado desde ${cNombre(desde)}`)}catch(e){toast("Se registró el pago pero no se movió el vencimiento")}
+  if(falta>0.5){const origen=cuentas().find(c=>c.tipo!=="credito"&&c.id!==desde&&(saldos()[c.id]||0)>=falta)?.id||(desde==="mp"?"efectivo":"mp");
+    setTimeout(()=>movForm("transferencia",{cuenta:origen,destino:desde,monto:falta,nota:"Plata para "+p.concepto}),400);
+    toast(`${cNombre(desde)} no tenía saldo: registrá de dónde pasaste la plata`)}
 }
 
 /* ---------- eventos ---------- */
