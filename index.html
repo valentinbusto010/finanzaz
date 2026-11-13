@@ -737,7 +737,7 @@ function vNegGastos(){
 
 /* formularios del negocio */
 async function ajStock(pid,delta,costoNuevo,cant){
-  const p=prodById(pid);if(!p||!db)return;const st=+p.stock||0,upd={stock:st+delta};
+  const p=prodById(pid);if(!p||!db||p.botId)return;const st=+p.stock||0,upd={stock:st+delta};
   if(costoNuevo!=null)upd.costo=st>0?Math.round((st*(+p.costo||0)+cant*costoNuevo)/(st+cant)*100)/100:costoNuevo;
   try{await db.collection("productos").doc(pid).update(upd)}catch(e){toast("No se actualizó el stock")}
 }
@@ -749,7 +749,7 @@ function productoForm(p){
     {type:"pair",items:[{type:"number",k:"costo",label:"Costo por unidad",ph:"0"},{type:"select",k:"monedaCosto",label:"Moneda",opts:["ARS","USD"]}]},
     {type:"number",k:"precio",label:"Precio de venta ($)",cls:"amount",ph:"0"},
     {type:"pair",items:[{type:"number",k:"stock",label:"Unidades en stock",ph:"0"},{type:"number",k:"minimo",label:"Avisar con",ph:"2"}]},
-    {type:"info",html:`Si el costo es en dólares, se pasa a pesos con tu dólar de referencia (${money(+cfg.usd)}).`}
+    {type:"info",html:p?.botId?"<b>Este producto viene del bot.</b> Cambiá precio, costo o stock en el panel del bot: se actualiza solo acá. Lo que cambies acá se pisa con lo del bot.":`Si el costo es en dólares, se pasa a pesos con tu dólar de referencia (${money(+cfg.usd)}).`}
   ],init,st=>{
     if(!st.nombre.trim())return"Poné el nombre del producto.";if(!(+st.precio>0))return"Poné el precio de venta.";
     const costo=toARS(+st.costo||0,st.monedaCosto);
@@ -766,7 +766,9 @@ function ventaForm(v){
   openSheet(v?"Editar venta":"Nueva venta",st=>{
     if(st.productoId!==st._last){const p=prodById(st.productoId);if(p){st.precio=+p.precio||"";st.costo=+p.costo||""}st._last=st.productoId}
     const otro=st.productoId==="_otro";
+    const bot=!otro&&prodById(st.productoId)?.botId;
     return[{type:"select",k:"productoId",label:"Producto",opts,redraw:true},
+      ...(bot&&!v?[{type:"info",html:"<b>Este producto está en el bot.</b> Cargá la venta en el panel del bot y aparece sola acá. Si la cargás en los dos lados, se cuenta dos veces."}]:[]),
       ...(otro?[{type:"pair",items:[{type:"text",k:"nombre",label:"Qué vendiste",ph:"Ej: funda"},{type:"number",k:"costo",label:"Te costó (c/u)",ph:"0"}]}]:[]),
       {type:"pair",items:[{type:"number",k:"cantidad",label:"Cantidad",ph:"1"},{type:"number",k:"precio",label:"Precio c/u",cls:"amount",ph:"0"}]},
       {type:"pair",items:[{type:"select",k:"canal",label:"Canal",opts:CANALES},{type:"select",k:"cobro",label:"Cobro",opts:COBROS}]},
@@ -793,7 +795,7 @@ function compraForm(c){
       {type:"pair",items:[{type:"number",k:"cantidad",label:"Unidades",ph:"0"},{type:"number",k:"costoU",label:"Costo c/u",cls:"amount",ph:"0"}]},
       {type:"pair",items:[{type:"select",k:"moneda",label:"Moneda",opts:["ARS","USD"]},{type:"date",k:"fecha",label:"Fecha"}]},
       {type:"text",k:"proveedor",label:"Proveedor (opcional)",ph:"Ej: mayorista Once"},
-      {type:"info",html:"Suma las unidades al stock y promedia el costo con lo que ya tenías. Sale de la caja del negocio."}];
+      {type:"info",html:prodById(st.productoId)?.botId?"Acá queda registrado el gasto de la compra. <b>Las unidades sumalas en el panel del bot</b>: el stock de este producto lo maneja el bot y se actualiza solo.":"Suma las unidades al stock y promedia el costo con lo que ya tenías. Sale de la caja del negocio."}];
   },init,st=>{
     const cant=Math.round(+st.cantidad||0),nuevo=st.productoId==="_nuevo"&&!c;
     if(!(cant>0))return"Poné cuántas unidades compraste.";if(!(+st.costoU>0))return"Poné el costo por unidad.";if(nuevo&&!st.nombre.trim())return"Poné el nombre del producto.";if(nuevo&&!(+st.precio>0))return"Poné el precio de venta.";
