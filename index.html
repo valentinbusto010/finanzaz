@@ -226,6 +226,21 @@ nav.tabs button[aria-current="page"]{background:rgba(0,102,255,.16);color:#5fb8f
 .err{color:#ef4444}
 .toast{background:rgba(10,14,24,.92);color:#fff;border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);bottom:calc(150px + env(safe-area-inset-bottom,0px))}
 :focus-visible{outline-color:var(--cyan)}
+
+/* ===== Nitidez en Windows: sin desenfoque detrás del texto ni medios píxeles ===== */
+.card,.acc,.sheet,.toast,.fab.alt,header.top,nav.tabs,.sheet-bg{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.card{background:#0d121c;border-color:rgba(255,255,255,.08)}
+.acc{background:#111827;transition:border-color .25s,box-shadow .25s}
+.acc:hover{transform:none}
+header.top{background:#070a12;box-shadow:0 0 0 100vmax #070a12}
+body::before{background:#070a12}
+nav.tabs{left:0;right:0;margin:0 auto;transform:none;background:#0a0e18}
+.fab.alt{background:#0a0e18}
+.toast{left:0;right:0;margin:0 auto;width:max-content;max-width:calc(100% - 32px);transform:none;background:#0a0e18}
+.sheet-bg{background:rgba(0,0,0,.72)}
+.tr-orb{will-change:auto}
+body{text-rendering:optimizeLegibility;-webkit-font-smoothing:auto;font-kerning:normal}
+.card h2,.stat .k,.acc .n,.day,nav.tabs button,.f label{letter-spacing:.03em}
 </style>
 
 <div class="tr-bg" aria-hidden="true"><div class="tr-grid"></div><div class="tr-orb tr-orb-a"></div><div class="tr-orb tr-orb-b"></div><div class="tr-noise"></div></div>
