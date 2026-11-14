@@ -143,7 +143,6 @@ body::before{background:rgba(7,10,18,.85)}
 header.top{background:rgba(7,10,18,.6);backdrop-filter:blur(18px) saturate(150%);-webkit-backdrop-filter:blur(18px) saturate(150%);border-bottom:1px solid rgba(255,255,255,.06);
   margin-left:calc(-1 * max(16px,env(safe-area-inset-left,0px)));margin-right:calc(-1 * max(16px,env(safe-area-inset-right,0px)));
   padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));margin-bottom:20px;min-height:58px}
-header.top{box-shadow:0 0 0 100vmax rgba(7,10,18,.6);clip-path:inset(0 -100vmax)}
 .brand{display:flex;align-items:center;gap:10px;font-family:var(--f-body);font-size:14px;font-weight:600;letter-spacing:0;color:#fff;min-width:0}
 .brand-t{display:flex;flex-direction:column;line-height:1.2}
 .brand small{display:block;font-size:11px;font-weight:500;color:var(--muted-2);text-transform:none;letter-spacing:0}
@@ -232,7 +231,7 @@ nav.tabs button[aria-current="page"]{background:rgba(0,102,255,.16);color:#5fb8f
 .card{background:#0d121c;border-color:rgba(255,255,255,.08)}
 .acc{background:#111827;transition:border-color .25s,box-shadow .25s}
 .acc:hover{transform:none}
-header.top{background:#070a12;box-shadow:0 0 0 100vmax #070a12}
+header.top{background:#070a12;box-shadow:none;clip-path:none;margin:0 0 20px;padding-left:max(16px,calc((100% - 980px) / 2 + 16px),env(safe-area-inset-left,0px));padding-right:max(16px,calc((100% - 980px) / 2 + 16px),env(safe-area-inset-right,0px))}
 body::before{background:#070a12}
 nav.tabs{left:0;right:0;margin:0 auto;transform:none;background:#0a0e18}
 .fab.alt{background:#0a0e18}
@@ -244,8 +243,7 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:auto;font-kerning:
 </style>
 
 <div class="tr-bg" aria-hidden="true"><div class="tr-grid"></div><div class="tr-orb tr-orb-a"></div><div class="tr-orb tr-orb-b"></div><div class="tr-noise"></div></div>
-<div class="wrap">
-  <header class="top">
+<header class="top">
     <div class="brand"><span class="tr-logo" aria-label="TECNO riv">TECNO<i>riv</i></span><span class="brand-t">Finanzas<small>Valen · <button class="out" id="logout" type="button">Salir</button></small></span></div>
     <div class="month" aria-label="Mes">
       <button id="mPrev" aria-label="Mes anterior">‹</button>
@@ -253,6 +251,7 @@ body{text-rendering:optimizeLegibility;-webkit-font-smoothing:auto;font-kerning:
       <button id="mNext" aria-label="Mes siguiente">›</button>
     </div>
   </header>
+<div class="wrap">
   <div id="note" class="note" hidden></div>
   <main id="main"></main>
 </div>
