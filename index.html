@@ -171,7 +171,7 @@ const SB_URL="https://kuuxcphulirvpfpotjvt.supabase.co";
 const SB_KEY="sb_publishable_HETPWwYqSW7HjI9knP4tiw_nusJYRhb";
 const SB=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 let UID=null;
-const COLS=["movs","pagos","invs","config","neg","productos"];
+const COLS=["movs","pagos","invs","config","neg","productos","mpin"];
 const subs=[];
 const err=e=>({code:(e&&e.code==="invalid_argument")?"invalid_argument":"unavailable",message:(e&&e.message)||String(e)});
 async function fetchCol(col){
@@ -281,6 +281,7 @@ async function boot(){
   db.collection("invs").onSnapshot(s=>{invs=s.docs.map(d=>({id:d.id,...d.data()}));if(!s.metadata.fromCache)loaded.i=true;settle();render()},e=>note("Error leyendo inversiones ("+e.code+")."));
   db.doc("config/main").onSnapshot(s=>{if(s.exists)cfg={...cfg,...s.data()};render()},()=>{});
   db.collection("neg").onSnapshot(s=>{neg=s.docs.map(d=>({id:d.id,...d.data()}));render()},e=>note("Error leyendo el negocio ("+e.code+")."));
+  db.collection("mpin").onSnapshot(s=>{mpin=s.docs.map(d=>({id:d.id,...d.data()}));render()},()=>{});
   db.collection("productos").onSnapshot(s=>{prods=s.docs.map(d=>({id:d.id,...d.data()}));render()},e=>note("Error leyendo productos ("+e.code+")."));
 }
 async function save(col,id,data){
@@ -372,6 +373,7 @@ function vResumen(){
   const s=saldos(),disp=cuentas().filter(c=>c.tipo!=="credito").reduce((a,c)=>a+(s[c.id]||0),0);
   const mes=movsMes();
   return`<div class="view two">
+  ${vMpInbox()}
   ${vCuentas()}
   ${vIngresos()}
   <section class="card hero"><h2>Balance de ${monthName(month)}</h2>
@@ -867,6 +869,77 @@ document.addEventListener("click",e=>{
   if(t.dataset.nprod){const p=prodById(t.dataset.nprod);p&&productoForm(p);return}
   const a=t.dataset.nact;if(!a)return;
   ({venta:()=>ventaForm(),compra:()=>compraForm(),producto:()=>productoForm(),gasto:()=>gastoNegForm(),retiro:()=>retiroForm(null,"retiro"),aporte:()=>retiroForm(null,"aporte"),caja:cajaForm}[a]||(()=>{}))();
+});
+
+/* ---------- Mercado Pago: bandeja "Por revisar" ---------- */
+let mpin=[], mpSyncing=false;
+function mpPend(){return mpin.filter(x=>x.estado==="pendiente").sort((a,b)=>(b.fecha+b.hora).localeCompare(a.fecha+a.hora))}
+function mpAdivina(x){const d=(x.detalle||"").toLowerCase();
+  if(/facebk|facebook|meta|instagram/.test(d))return{que:"negocio",cat:"Publicidad"};
+  if(/ypf|shell|axion|puma|nafta|combustible/.test(d))return{que:"gasto",cat:"Nafta / moto"};
+  if(/super|carrefour|dia |coto|changomas|vea|almac|verduler|carnic/.test(d))return{que:"gasto",cat:"Supermercado"};
+  if(/netflix|spotify|apple|google|youtube|disney|prime/.test(d))return{que:"gasto",cat:"Suscripciones"};
+  if(/sube|uber|cabify|didi/.test(d))return{que:"gasto",cat:"Transporte"};
+  return x.sentido==="sale"?{que:"gasto",cat:"Comida"}:{que:"ingreso",cat:"Otros"}}
+function vMpInbox(){
+  const p=mpPend(),s=saldos(),app=s.mp||0,real=cfg.mpSaldo,at=cfg.mpSaldoAt?new Date(cfg.mpSaldoAt):null;
+  const cuando=at?at.toLocaleString("es-AR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"nunca";
+  const dif=real!=null?Math.round((real-app)*100)/100:0;
+  return`<section class="card full"><h2>Mercado Pago${p.length?` · ${p.length} por revisar`:""}<button class="btn sm" data-mpsync ${mpSyncing?"disabled":""}>${mpSyncing?"Buscando…":"Actualizar"}</button></h2>
+    ${p.length?`<div class="list">${p.slice(0,8).map(x=>`<button class="item" data-mpin="${esc(x.id)}"><span class="ico ${x.sentido==="sale"?"out":"in"}">${x.sentido==="sale"?"↑":"↓"}</span><span class="mid"><span class="t">${esc(x.detalle||x.etiqueta)}</span><span class="s">${esc(x.detalle?x.etiqueta:"")}${x.detalle?" · ":""}${dayLabel(x.fecha)} ${esc(x.hora||"")}</span></span><span class="amt ${x.sentido==="sale"?"neg":"pos"}">${x.sentido==="sale"?"−":"+"}${money(+x.monto)}<small><span class="chip soon">Revisar</span></small></span></button>`).join("")}</div>
+      ${p.length>8?`<div class="empty">y ${p.length-8} más…</div>`:""}`
+      :`<div class="empty">Todo revisado. Los movimientos nuevos de tu Mercado Pago aparecen acá solos, 3 veces por día.</div>`}
+    <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:10px"><span>Saldo en Mercado Pago${real!=null?` (${cuando})`:""}</span><b>${real!=null?money(real):"—"}</b></div>
+    ${real!=null&&!p.length&&Math.abs(dif)>=1?`<div class="hint" style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><span>La app dice ${money(app)}: hay ${money(Math.abs(dif))} de diferencia.</span><button class="btn sm primary" data-mpajuste>Igualar</button></div>`:""}
+  </section>`;
+}
+async function mpSync(){
+  if(mpSyncing)return;mpSyncing=true;render();toast("Buscando movimientos en Mercado Pago… puede tardar hasta 1 minuto");
+  try{const{data,error}=await SB.functions.invoke("mp-sync",{method:"POST"});
+    if(error)throw error;
+    if(data?.estado==="ok")toast(data.nuevos_para_revisar?`Listo: ${data.nuevos_para_revisar} movimiento${data.nuevos_para_revisar>1?"s":""} de MP para revisar`:"Mercado Pago al día");
+    else toast(data?.mensaje||"Mercado Pago no respondió. Probá en unos minutos.");
+  }catch(e){toast("No se pudo actualizar Mercado Pago. Probá en unos minutos.")}
+  mpSyncing=false;render();
+}
+function mpRevisar(id){
+  const x=mpin.find(m=>m.id===id);if(!x)return;const g=mpAdivina(x),sale=x.sentido==="sale";
+  const init={que:g.que,categoria:sale?(CAT_G.includes(g.cat)?g.cat:"Comida"):"Otros",catneg:CAT_GN.includes(g.cat)?g.cat:"Publicidad",otra:sale?"naranja":"galicia",nota:x.detalle||""};
+  openSheet(sale?"¿Qué fue este pago?":"¿Qué fue esta plata?",st=>{
+    const f=[{type:"info",html:`<b>${sale?"−":"+"}${money(+x.monto)}</b> · ${esc(x.etiqueta)}${x.detalle?` · ${esc(x.detalle)}`:""}<br>${dayLabel(x.fecha)} ${esc(x.hora||"")}`},
+      {type:"seg",k:"que",label:"Qué fue",opts:sale?[["gasto","Gasto"],["mia","A cuenta mía"],["negocio","Tecno Riv"],["ignorar","Ya cargado"]]:[["ingreso","Ingreso"],["mia","De cuenta mía"],["negocio","Tecno Riv"],["ignorar","Ya cargado"]]}];
+    if(st.que==="gasto")f.push({type:"select",k:"categoria",label:"Categoría",opts:CAT_G});
+    if(st.que==="ingreso")f.push({type:"select",k:"categoria",label:"Categoría",opts:CAT_I});
+    if(st.que==="mia")f.push({type:"select",k:"otra",label:sale?"Fue a":"Vino de",opts:cuentaOpts(c=>c.id!=="mp")});
+    if(st.que==="negocio")f.push(sale?{type:"select",k:"catneg",label:"Gasto del negocio",opts:CAT_GN}:{type:"info",html:"Se carga como plata de Tecno Riv que entró a tu MP: suma a tu <b>deuda con Tecno Riv</b>."});
+    if(st.que==="ignorar")f.push({type:"info",html:"No se carga nada nuevo: lo saco de la bandeja porque ya lo tenías cargado."});
+    if(st.que!=="ignorar")f.push({type:"text",k:"nota",label:"Detalle (opcional)",ph:"Ej: almuerzo, nafta, Juan"});
+    return f;
+  },init,st=>(async()=>{
+    const base={monto:+x.monto,moneda:"ARS",fecha:x.fecha,nota:(st.nota||"").trim()||x.detalle||x.etiqueta,creado:Date.now(),mpId:x.id};
+    let ok=true;
+    if(st.que==="gasto")ok=await save("movs","mpi-"+x.id,{...base,tipo:"gasto",categoria:st.categoria,cuenta:"mp"});
+    else if(st.que==="ingreso")ok=await save("movs","mpi-"+x.id,{...base,tipo:"ingreso",categoria:st.categoria,cuenta:"mp"});
+    else if(st.que==="mia")ok=await save("movs","mpi-"+x.id,sale?{...base,tipo:"transferencia",cuenta:"mp",destino:st.otra}:{...base,tipo:"transferencia",cuenta:st.otra,destino:"mp"});
+    else if(st.que==="negocio"&&sale){
+      ok=await save("neg","mpg-"+x.id,{tipo:"gasto",categoria:st.catneg,monto:+x.monto,fecha:x.fecha,nota:base.nota+" (pagado con tu MP)",creado:Date.now()})
+        &&await save("neg","mpa-"+x.id,{tipo:"aporte",monto:+x.monto,cuenta:"mp",fecha:x.fecha,nota:"Pagaste "+base.nota+" con tu MP",creado:Date.now()})
+        &&await save("movs","neg-mpa-"+x.id,{...base,tipo:"transferencia",cuenta:"mp",destino:cuentas().some(c=>c.id==="tecnoriv")?"tecnoriv":"mp",negId:"mpa-"+x.id});
+    }else if(st.que==="negocio")ok=await save("movs","mpi-"+x.id,{...base,tipo:"transferencia",cuenta:"tecnoriv",destino:"mp"});
+    if(!ok)return false;
+    try{await db.collection("mpin").doc(x.id).update({estado:st.que==="ignorar"?"ignorado":"ok",que:st.que})}catch(e){toast("Se cargó, pero no salió de la bandeja");return true}
+    toast(st.que==="ignorar"?"Sacado de la bandeja":"Movimiento cargado");return true;
+  })());
+}
+function mpIgualar(){
+  const real=cfg.mpSaldo,app=saldos().mp||0,delta=Math.round((real-app)*100)/100;if(real==null||Math.abs(delta)<1)return;
+  save("movs",null,{tipo:"ajuste",cuenta:"mp",delta,monto:Math.abs(delta),moneda:"ARS",fecha:today(),nota:"Igualado con el saldo real de Mercado Pago",creado:Date.now()}).then(ok=>ok&&toast("Saldo de Mercado Pago igualado"));
+}
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button");if(!t||t.closest(".sheet-bg"))return;
+  if(t.hasAttribute("data-mpsync"))return mpSync();
+  if(t.dataset.mpin)return mpRevisar(t.dataset.mpin);
+  if(t.hasAttribute("data-mpajuste"))return mpIgualar();
 });
 
 /* ---------- eventos ---------- */
